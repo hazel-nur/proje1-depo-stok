@@ -21,3 +21,26 @@ model User {
   createdAt   DateTime  @default(now())
   deletedAt   DateTime?
 }
+model Category {
+  id        String    @id @default(uuid())
+  ad        String    @unique
+  aciklama  String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+  products  Product[]
+}
+
+model Product {
+  id              String    @id @default(uuid())
+  ad              String
+  sku             String    @unique
+  aciklama        String?
+  birim           String    @default("adet")
+  fiyat           Float
+  stokMiktari     Int       @default(0)
+  minStokSeviyesi Int       @default(0)
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+}
