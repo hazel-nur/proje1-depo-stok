@@ -26,6 +26,13 @@ export class ProductsController {
     return this.productsService.findAll();
   }
 
+  // ÖNEMLİ: Bu uç, ':id' ucundan ÖNCE durmalı
+  @Get('deleted')
+  @Roles('Admin')
+  findAllDeleted() {
+    return this.productsService.findAllDeleted();
+  }
+
   @Get(':id')
   @Roles('Admin', 'Şube Yöneticisi', 'Satın Alma Sorumlusu', 'Depo Personeli')
   findOne(@Param('id') id: string) {
@@ -36,6 +43,12 @@ export class ProductsController {
   @Roles('Admin', 'Şube Yöneticisi', 'Satın Alma Sorumlusu')
   update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
+  }
+
+  @Patch(':id/restore')
+  @Roles('Admin')
+  restore(@Param('id') id: string) {
+    return this.productsService.restore(id);
   }
 
   @Delete(':id')
