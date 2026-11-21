@@ -5,14 +5,14 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../shared/prisma.service';
+import { AuthRepository } from './auth.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
-    constructor(
-    private prisma: PrismaService,
+  constructor(
+    private repository: AuthRepository,
     private jwtService: JwtService,
   ) {}
 
@@ -29,9 +29,7 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    const existingUser = await this.repository.findByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('Bu email adresi zaten kayıtlı.');
@@ -39,23 +37,19 @@ export class AuthService {
 
     const sifreHash = await this.hashPassword(dto.sifre);
 
-    const user = await this.prisma.user.create({
-      data: {
-        ad: dto.ad,
-        email: dto.email,
-        sifreHash: sifreHash,
-        role: dto.role,
-      },
+    const user = await this.repository.create({
+      ad: dto.ad,
+      email: dto.email,
+      sifreHash: sifreHash,
+      role: dto.role,
     });
 
     const { sifreHash: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
-    async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+  async login(dto: LoginDto) {
+    const user = await this.repository.findByEmail(dto.email);
 
     if (!user) {
       throw new UnauthorizedException('Email veya şifre hatalı.');
