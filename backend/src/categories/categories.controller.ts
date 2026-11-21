@@ -26,6 +26,13 @@ export class CategoriesController {
     return this.categoriesService.findAll();
   }
 
+  // ÖNEMLİ: Bu uç, ':id' ucundan ÖNCE durmalı
+  @Get('deleted')
+  @Roles('Admin')
+  findAllDeleted() {
+    return this.categoriesService.findAllDeleted();
+  }
+
   @Get(':id')
   @Roles('Admin', 'Şube Yöneticisi', 'Satın Alma Sorumlusu', 'Depo Personeli')
   findOne(@Param('id') id: string) {
@@ -36,6 +43,12 @@ export class CategoriesController {
   @Roles('Admin', 'Şube Yöneticisi')
   update(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.categoriesService.update(id, dto);
+  }
+
+  @Patch(':id/restore')
+  @Roles('Admin')
+  restore(@Param('id') id: string) {
+    return this.categoriesService.restore(id);
   }
 
   @Delete(':id')
