@@ -1,0 +1,54 @@
+# Tek komutla çalıştırma:  docker compose up --build
+# (Not: bu dosya Docker olmayan ortamda yazıldı; `docker compose config` ile söz dizimi
+#  kontrol edilmeli, imajlar build edilip denenemedi. Bkz. README.)
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: depo_stok_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d depo_stok_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/depo_stok_db?schema=public
+      JWT_SECRET: ${JWT_SECRET:-degistir-access-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-degistir-refresh-secret}
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3100}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:3000
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "3100:3100"
+
+volumes:
+  pgdata:

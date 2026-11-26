@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 @Injectable()
@@ -18,6 +23,9 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user; // JwtAuthGuard'ın request'e eklediği kullanıcı bilgisi
 
-    return requiredRoles.includes(user.role);
+    if (!user || !requiredRoles.includes(user.role)) {
+      throw new ForbiddenException('Bu işlem için yetkiniz yok.');
+    }
+    return true;
   }
 }

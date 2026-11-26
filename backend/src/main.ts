@@ -1,20 +1,15 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { setupApp, setupSwagger } from './setup-app';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  setupApp(app);
+  setupSwagger(app);
 
-  const config = new DocumentBuilder()
-    .setTitle('Depo/Stok Yönetim API')
-    .setDescription('Depo stok yönetim sistemi API dokümantasyonu')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
-
-  await app.listen(3000);
+  const port = Number(process.env.PORT ?? 3000);
+  await app.listen(port);
+  console.log(`API http://localhost:${port}  |  Swagger http://localhost:${port}/api`);
 }
 bootstrap();

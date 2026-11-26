@@ -5,10 +5,30 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UsersRepository } from './users.repository';
+import { AuthService } from '../auth/auth.service';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private repository: UsersRepository) {}
+  constructor(
+    private repository: UsersRepository,
+    private authService: AuthService,
+  ) {}
+
+  // Admin: istenen rolde yeni kullanıcı oluşturur
+  async create(dto: CreateUserDto) {
+    const var_mi = await this.repository.findByEmail(dto.email);
+    if (var_mi) {
+      throw new ConflictException('Bu email adresi zaten kayıtlı.');
+    }
+    const sifreHash = await this.authService.hashPassword(dto.sifre);
+    return this.repository.create({
+      ad: dto.ad,
+      email: dto.email,
+      sifreHash,
+      role: dto.role,
+    });
+  }
 
   findAll() {
     return this.repository.findAllActive();

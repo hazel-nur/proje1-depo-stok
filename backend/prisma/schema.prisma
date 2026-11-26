@@ -12,15 +12,55 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id          String    @id @default(uuid())
-  ad          String
-  email       String    @unique
-  sifreHash   String
-  role        String
-  createdAt   DateTime  @default(now())
-  deletedAt   DateTime?
+enum MovementType {
+  GIRIS
+  CIKIS
+  TRANSFER
 }
+
+enum TransferStatus {
+  BEKLIYOR
+  ONAYLANDI
+  REDDEDILDI
+  IPTAL
+}
+
+enum PurchaseStatus {
+  BEKLIYOR
+  ONAYLANDI
+  REDDEDILDI
+  TESLIM_ALINDI
+  IPTAL
+}
+
+enum CountStatus {
+  ACIK
+  UYGULANDI
+}
+
+model User {
+  id               String    @id @default(uuid())
+  ad               String
+  email            String    @unique
+  sifreHash        String
+  role             String
+  refreshTokenHash String?
+  createdAt        DateTime  @default(now())
+  deletedAt        DateTime?
+
+  stockMovements      StockMovement[]
+  transferRequests    TransferRequest[] @relation("TransferRequester")
+  transferDecisions   TransferRequest[] @relation("TransferDecider")
+  purchaseRequests    PurchaseRequest[] @relation("PurchaseRequester")
+  purchaseDecisions   PurchaseRequest[] @relation("PurchaseDecider")
+  purchaseReceipts    PurchaseRequest[] @relation("PurchaseReceiver")
+  inventoryCounts     InventoryCount[]  @relation("CountCreator")
+  inventoryCountsDone InventoryCount[]  @relation("CountApplier")
+
+  @@index([role])
+  @@index([deletedAt])
+}
+
 model Category {
   id        String    @id @default(uuid())
   ad        String    @unique
@@ -28,6 +68,8 @@ model Category {
   createdAt DateTime  @default(now())
   deletedAt DateTime?
   products  Product[]
+
+  @@index([deletedAt])
 }
 
 model Product {
@@ -43,4 +85,208 @@ model Product {
   category        Category  @relation(fields: [categoryId], references: [id])
   createdAt       DateTime  @default(now())
   deletedAt       DateTime?
+
+  warehouseStocks     WarehouseStock[]
+  stockMovements      StockMovement[]
+  transferRequests    TransferRequest[]
+  purchaseItems       PurchaseRequestItem[]
+  inventoryCountItems InventoryCountItem[]
+
+  @@index([categoryId])
+  @@index([deletedAt])
+}
+
+model Warehouse {
+  id        String    @id @default(uuid())
+  ad        String    @unique
+  sehir     String?
+  adres     String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  stocks           WarehouseStock[]
+  movementsOut     StockMovement[]   @relation("MovementSource")
+  movementsIn      StockMovement[]   @relation("MovementTarget")
+  transfersOut     TransferRequest[] @relation("TransferSource")
+  transfersIn      TransferRequest[] @relation("TransferTarget")
+  purchaseRequests PurchaseRequest[]
+  inventoryCounts  InventoryCount[]
+
+  @@index([deletedAt])
+}
+
+model Supplier {
+  id        String    @id @default(uuid())
+  ad        String
+  email     String?
+  telefon   String?
+  adres     String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  purchaseRequests PurchaseRequest[]
+
+  @@index([ad])
+  @@index([deletedAt])
+}
+
+// Depo başına ürün stoğu (Product.stokMiktari = tüm depoların toplamı)
+model WarehouseStock {
+  id          String    @id @default(uuid())
+  warehouseId String
+  productId   String
+  miktar      Int       @default(0)
+  updatedAt   DateTime  @updatedAt
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([productId])
+}
+
+// Stok hareket defteri: kayıtlar değiştirilmez/silinmez (denetim izi)
+model StockMovement {
+  id                String       @id @default(uuid())
+  tip               MovementType
+  productId         String
+  miktar            Int
+  sourceWarehouseId String?
+  targetWarehouseId String?
+  aciklama          String?
+  userId            String
+  transferRequestId String?
+  purchaseRequestId String?
+  inventoryCountId  String?
+  createdAt         DateTime     @default(now())
+
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceWarehouse Warehouse?       @relation("MovementSource", fields: [sourceWarehouseId], references: [id], onDelete: SetNull)
+  targetWarehouse Warehouse?       @relation("MovementTarget", fields: [targetWarehouseId], references: [id], onDelete: SetNull)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transferRequest TransferRequest? @relation(fields: [transferRequestId], references: [id], onDelete: SetNull)
+  purchaseRequest PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id], onDelete: SetNull)
+  inventoryCount  InventoryCount?  @relation(fields: [inventoryCountId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([sourceWarehouseId])
+  @@index([targetWarehouseId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([tip])
+}
+
+model TransferRequest {
+  id                String         @id @default(uuid())
+  productId         String
+  miktar            Int
+  sourceWarehouseId String
+  targetWarehouseId String
+  durum             TransferStatus @default(BEKLIYOR)
+  aciklama          String?
+  redNedeni         String?
+  requestedById     String
+  decidedById       String?
+  decidedAt         DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceWarehouse Warehouse       @relation("TransferSource", fields: [sourceWarehouseId], references: [id], onDelete: Cascade)
+  targetWarehouse Warehouse       @relation("TransferTarget", fields: [targetWarehouseId], references: [id], onDelete: Cascade)
+  requestedBy     User            @relation("TransferRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  decidedBy       User?           @relation("TransferDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  movements       StockMovement[]
+
+  @@index([durum])
+  @@index([productId])
+  @@index([sourceWarehouseId])
+  @@index([targetWarehouseId])
+  @@index([requestedById])
+  @@index([deletedAt])
+}
+
+model PurchaseRequest {
+  id            String         @id @default(uuid())
+  supplierId    String
+  warehouseId   String
+  durum         PurchaseStatus @default(BEKLIYOR)
+  aciklama      String?
+  redNedeni     String?
+  requestedById String
+  decidedById   String?
+  decidedAt     DateTime?
+  receivedById  String?
+  receivedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+
+  supplier    Supplier              @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  requestedBy User                  @relation("PurchaseRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  decidedBy   User?                 @relation("PurchaseDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  receivedBy  User?                 @relation("PurchaseReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
+  items       PurchaseRequestItem[]
+  movements   StockMovement[]
+
+  @@index([durum])
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([requestedById])
+  @@index([deletedAt])
+}
+
+model PurchaseRequestItem {
+  id                String @id @default(uuid())
+  purchaseRequestId String
+  productId         String
+  miktar            Int
+  birimFiyat        Float
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseRequestId])
+  @@index([productId])
+}
+
+model InventoryCount {
+  id          String      @id @default(uuid())
+  warehouseId String
+  durum       CountStatus @default(ACIK)
+  aciklama    String?
+  createdById String
+  appliedById String?
+  appliedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  warehouse Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  createdBy User                 @relation("CountCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  appliedBy User?                @relation("CountApplier", fields: [appliedById], references: [id], onDelete: SetNull)
+  items     InventoryCountItem[]
+  movements StockMovement[]
+
+  @@index([warehouseId])
+  @@index([durum])
+  @@index([createdById])
+  @@index([deletedAt])
+}
+
+// fark = sayilanMiktar - beklenenMiktar
+model InventoryCountItem {
+  id               String @id @default(uuid())
+  inventoryCountId String
+  productId        String
+  beklenenMiktar   Int
+  sayilanMiktar    Int
+  fark             Int
+
+  inventoryCount InventoryCount @relation(fields: [inventoryCountId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([inventoryCountId, productId])
+  @@index([productId])
 }
