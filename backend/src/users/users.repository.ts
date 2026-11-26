@@ -39,10 +39,18 @@ export class UsersRepository {
     });
   }
 
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  create(data: { ad: string; email: string; sifreHash: string; role: string }) {
+    return this.prisma.user.create({ data, select: GUVENLI_ALANLAR });
+  }
+
   updateRole(id: string, role: string) {
     return this.prisma.user.update({
       where: { id },
-      data: { role },
+      data: { role, refreshTokenHash: null },
       select: GUVENLI_ALANLAR,
     });
   }
@@ -50,7 +58,7 @@ export class UsersRepository {
   markDeleted(id: string) {
     return this.prisma.user.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: new Date(), refreshTokenHash: null },
       select: GUVENLI_ALANLAR,
     });
   }

@@ -1,0 +1,276 @@
+// Depo/Stok Yönetim Sistemi - ER diyagramı (DBML)
+// Görselleştirmek için: https://dbdiagram.io/d  adresine yapıştırın.
+// Kaynak gerçek şema: backend/prisma/schema.prisma
+
+Enum MovementType {
+  GIRIS
+  CIKIS
+  TRANSFER
+}
+
+Enum TransferStatus {
+  BEKLIYOR
+  ONAYLANDI
+  REDDEDILDI
+  IPTAL
+}
+
+Enum PurchaseStatus {
+  BEKLIYOR
+  ONAYLANDI
+  REDDEDILDI
+  TESLIM_ALINDI
+  IPTAL
+}
+
+Enum CountStatus {
+  ACIK
+  UYGULANDI
+}
+
+Table User {
+  id               text [pk]
+  ad               text [not null]
+  email            text [unique, not null]
+  sifreHash        text [not null, note: 'bcrypt hash']
+  role             text [not null, note: 'Depo Personeli | Satın Alma Sorumlusu | Şube Yöneticisi | Admin']
+  refreshTokenHash text [note: 'SHA-256 hash; logout/rotation ile sıfırlanır']
+  createdAt        timestamp [not null]
+  deletedAt        timestamp [note: 'soft delete']
+
+  indexes {
+    role
+    deletedAt
+  }
+}
+
+Table Category {
+  id        text [pk]
+  ad        text [unique, not null]
+  aciklama  text
+  createdAt timestamp [not null]
+  deletedAt timestamp
+
+  indexes {
+    deletedAt
+  }
+}
+
+Table Product {
+  id              text [pk]
+  ad              text [not null]
+  sku             text [unique, not null]
+  aciklama        text
+  birim           text [not null, default: 'adet']
+  fiyat           float [not null]
+  stokMiktari     int [not null, default: 0, note: 'tüm depoların toplamı; sadece stok hareketleriyle değişir']
+  minStokSeviyesi int [not null, default: 0]
+  categoryId      text [not null]
+  createdAt       timestamp [not null]
+  deletedAt       timestamp
+
+  indexes {
+    categoryId
+    deletedAt
+  }
+}
+
+Table Warehouse {
+  id        text [pk]
+  ad        text [unique, not null]
+  sehir     text
+  adres     text
+  createdAt timestamp [not null]
+  deletedAt timestamp
+
+  indexes {
+    deletedAt
+  }
+}
+
+Table Supplier {
+  id        text [pk]
+  ad        text [not null]
+  email     text
+  telefon   text
+  adres     text
+  createdAt timestamp [not null]
+  deletedAt timestamp
+
+  indexes {
+    ad
+    deletedAt
+  }
+}
+
+Table WarehouseStock {
+  id          text [pk]
+  warehouseId text [not null]
+  productId   text [not null]
+  miktar      int [not null, default: 0]
+  updatedAt   timestamp [not null]
+
+  indexes {
+    (warehouseId, productId) [unique]
+    productId
+  }
+}
+
+Table StockMovement {
+  id                text [pk]
+  tip               MovementType [not null]
+  productId         text [not null]
+  miktar            int [not null]
+  sourceWarehouseId text
+  targetWarehouseId text
+  aciklama          text
+  userId            text [not null]
+  transferRequestId text
+  purchaseRequestId text
+  inventoryCountId  text
+  createdAt         timestamp [not null]
+
+  note: 'Hareket defteri: değiştirilmez ve silinmez (denetim izi)'
+
+  indexes {
+    productId
+    sourceWarehouseId
+    targetWarehouseId
+    userId
+    createdAt
+    tip
+  }
+}
+
+Table TransferRequest {
+  id                text [pk]
+  productId         text [not null]
+  miktar            int [not null]
+  sourceWarehouseId text [not null]
+  targetWarehouseId text [not null]
+  durum             TransferStatus [not null, default: 'BEKLIYOR']
+  aciklama          text
+  redNedeni         text
+  requestedById     text [not null]
+  decidedById       text
+  decidedAt         timestamp
+  createdAt         timestamp [not null]
+  updatedAt         timestamp [not null]
+  deletedAt         timestamp
+
+  indexes {
+    durum
+    productId
+    sourceWarehouseId
+    targetWarehouseId
+    requestedById
+    deletedAt
+  }
+}
+
+Table PurchaseRequest {
+  id            text [pk]
+  supplierId    text [not null]
+  warehouseId   text [not null, note: 'teslim alınacak depo']
+  durum         PurchaseStatus [not null, default: 'BEKLIYOR']
+  aciklama      text
+  redNedeni     text
+  requestedById text [not null]
+  decidedById   text
+  decidedAt     timestamp
+  receivedById  text
+  receivedAt    timestamp
+  createdAt     timestamp [not null]
+  updatedAt     timestamp [not null]
+  deletedAt     timestamp
+
+  indexes {
+    durum
+    supplierId
+    warehouseId
+    requestedById
+    deletedAt
+  }
+}
+
+Table PurchaseRequestItem {
+  id                text [pk]
+  purchaseRequestId text [not null]
+  productId         text [not null]
+  miktar            int [not null]
+  birimFiyat        float [not null]
+
+  indexes {
+    purchaseRequestId
+    productId
+  }
+}
+
+Table InventoryCount {
+  id          text [pk]
+  warehouseId text [not null]
+  durum       CountStatus [not null, default: 'ACIK']
+  aciklama    text
+  createdById text [not null]
+  appliedById text
+  appliedAt   timestamp
+  createdAt   timestamp [not null]
+  updatedAt   timestamp [not null]
+  deletedAt   timestamp
+
+  indexes {
+    warehouseId
+    durum
+    createdById
+    deletedAt
+  }
+}
+
+Table InventoryCountItem {
+  id               text [pk]
+  inventoryCountId text [not null]
+  productId        text [not null]
+  beklenenMiktar   int [not null]
+  sayilanMiktar    int [not null]
+  fark             int [not null, note: 'fark = sayilanMiktar - beklenenMiktar']
+
+  indexes {
+    (inventoryCountId, productId) [unique]
+    productId
+  }
+}
+
+Ref: Product.categoryId > Category.id
+
+Ref: WarehouseStock.warehouseId > Warehouse.id [delete: cascade]
+Ref: WarehouseStock.productId > Product.id [delete: cascade]
+
+Ref: StockMovement.productId > Product.id [delete: cascade]
+Ref: StockMovement.sourceWarehouseId > Warehouse.id [delete: set null]
+Ref: StockMovement.targetWarehouseId > Warehouse.id [delete: set null]
+Ref: StockMovement.userId > User.id [delete: cascade]
+Ref: StockMovement.transferRequestId > TransferRequest.id [delete: set null]
+Ref: StockMovement.purchaseRequestId > PurchaseRequest.id [delete: set null]
+Ref: StockMovement.inventoryCountId > InventoryCount.id [delete: set null]
+
+Ref: TransferRequest.productId > Product.id [delete: cascade]
+Ref: TransferRequest.sourceWarehouseId > Warehouse.id [delete: cascade]
+Ref: TransferRequest.targetWarehouseId > Warehouse.id [delete: cascade]
+Ref: TransferRequest.requestedById > User.id [delete: cascade]
+Ref: TransferRequest.decidedById > User.id [delete: set null]
+
+Ref: PurchaseRequest.supplierId > Supplier.id [delete: cascade]
+Ref: PurchaseRequest.warehouseId > Warehouse.id [delete: cascade]
+Ref: PurchaseRequest.requestedById > User.id [delete: cascade]
+Ref: PurchaseRequest.decidedById > User.id [delete: set null]
+Ref: PurchaseRequest.receivedById > User.id [delete: set null]
+
+Ref: PurchaseRequestItem.purchaseRequestId > PurchaseRequest.id [delete: cascade]
+Ref: PurchaseRequestItem.productId > Product.id [delete: cascade]
+
+Ref: InventoryCount.warehouseId > Warehouse.id [delete: cascade]
+Ref: InventoryCount.createdById > User.id [delete: cascade]
+Ref: InventoryCount.appliedById > User.id [delete: set null]
+
+Ref: InventoryCountItem.inventoryCountId > InventoryCount.id [delete: cascade]
+Ref: InventoryCountItem.productId > Product.id [delete: cascade]

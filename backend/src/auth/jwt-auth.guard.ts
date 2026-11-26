@@ -18,7 +18,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token bulunamadı.');
     }
 
-    const token = authHeader.split(' ')[1]; // "Bearer <token>" formatından token'ı ayırıyor
+    const [tip, token] = String(authHeader).split(' '); // "Bearer <token>" formatı
+    if (tip !== 'Bearer' || !token) {
+      throw new UnauthorizedException('Token bulunamadı.');
+    }
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
